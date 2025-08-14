@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Todo — polished</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: "#0f0f1a",
+                        panel: "#131427",
+                        panel2: "#1b1c34",
+                        card: "#23243f",
+                        ink: "#e5e7eb",
+                        mut: "#9aa0b4",
+                        ac: { DEFAULT: "#a855f7", soft: "#a855f71a" }
+                    },
+                    boxShadow: {
+                        soft: "0 8px 20px rgba(0,0,0,.35)"
+                    },
+                    borderRadius: { xl2: "1.25rem" }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* nicer focus ring */
+        :root {
+            --ring: 0 0 0 3px #a855f733, 0 0 0 1px #a855f7;
+        }
+
+        .ringy:focus-visible {
+            outline: none;
+            box-shadow: var(--ring);
+        }
+
+        .drag-over {
+            outline: 2px dashed #a855f7;
+            outline-offset: 6px;
+        }
+
+        .fade-in {
+            animation: fade .16s ease-out;
+        }
+
+        @keyframes fade {
+            from {
+                opacity: 0;
+                transform: translateY(2px)
+            }
+
+            to {
+                opacity: 1;
+                transform: none
+            }
+        }
+
+        .scale-tap:active {
+            transform: scale(.98);
+        }
+    </style>
+</head>
+
+<body class="bg-bg text-ink min-h-screen antialiased selection:bg-ac/20 selection:text-ink">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- HEADER -->
+        <header class="mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                <div>
+                    <h1 class="text-3xl font-semibold tracking-tight">Todo</h1>
+                    <p class="text-sm text-mut">Add, edit, delete, complete — saved locally</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <input id="q" placeholder="Search…"
+                            class="ringy bg-panel2 border border-[#2a2b4a] rounded-lg px-9 py-2 text-sm placeholder:text-mut/70"
+                            aria-label="Search tasks" />
+                        <svg class="w-4 h-4 absolute left-3 top-2.5 text-mut" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor">
+                            <path stroke-width="2" d="m21 21-4.3-4.3" />
+                            <circle cx="11" cy="11" r="7" stroke-width="2" />
+                        </svg>
+                    </div>
+                    <button id="clearDone"
+                        class="ringy px-3 py-2 text-sm rounded-lg bg-panel2 border border-[#2a2b4a] hover:bg-[#23244a]">Clear
+                        done</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- INPUT BAR -->
+        <section class="bg-panel/60 backdrop-blur rounded-xl2 p-3 sm:p-4 border border-[#232349] shadow-soft">
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input id="newTitle"
+                    class="ringy flex-1 bg-panel2 border border-[#2a2b4a] rounded-lg px-4 py-2 text-sm placeholder:text-mut/70"
+                    placeholder="Add a new task…" />
+                <select id="newCol" class="ringy bg-panel2 border border-[#2a2b4a] rounded-lg px-3 py-2 text-sm">
+                    <option value="todo">Todo</option>
+                    <option value="progress">In Progress</option>
+                    <option value="done">Done</option>
+                </select>
+                <button id="addBtn"
+                    class="scale-tap ringy bg-ac hover:bg-[#9548ee] text-white px-4 py-2 rounded-lg text-sm font-medium shadow-soft">Add</button>
+            </div>
+            <p class="text-[11px] text-mut mt-2">Tip: drag cards by the handle ⋮⋮, double-click a title to edit,
+                <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels. Autosaves to your browser.</p>
+        </section>
+
+        <!-- BOARD -->
+        <main class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            <!-- column -->
+            <section class="bg-panel rounded-xl2 p-4 border border-[#232349] shadow-soft" aria-labelledby="h-todo">
+                <h2 id="h-todo" class="font-medium mb-3">Todo</h2>
+                <div id="todo" class="col space-y-3 min-h-[180px]" role="list"></div>
+            </section>
+
+            <section class="bg-panel rounded-xl2 p-4 border border-[#232349] shadow-soft" aria-labelledby="h-progress">
+                <h2 id="h-progress" class="font-medium mb-3">In Progress</h2>
+                <div id="progress" class="col space-y-3 min-h-[180px]" role="list"></div>
+            </section>
+
+            <section class="bg-panel rounded-xl2 p-4 border border-[#232349] shadow-soft" aria-labelledby="h-done">
+                <h2 id="h-done" class="font-medium mb-3">Done</h2>
+                <div id="done" class="col space-y-3 min-h-[180px]" role="list"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- TEMPLATE (cloned in JS) -->
+    <template id="tpl">
+        <article draggable="true" role="listitem"
+            class="card group fade-in flex items-start justify-between gap-3 bg-card/80 hover:bg-card rounded-xl p-3 border border-[#2a2b4a] transition-colors">
+            <div class="flex items-start gap-3 flex-1">
+                <button class="handle text-mut hover:text-ink leading-none pt-1" title="Drag">
+                    <span class="inline-block select-none">⋮⋮</span>
+                </button>
+                <label class="flex gap-2 items-start flex-1">
+                    <input class="mt-1.5 accent-[#a855f7]" type="checkbox" />
+                    <div class="flex-1">
+                        <div class="title text-sm leading-5"></div>
+                        <input
+                            class="edit ringy hidden w-full bg-panel2 border border-[#2a2b4a] rounded-md px-2 py-1 text-sm" />
+                        <div class="meta text-[11px] text-mut mt-1 hidden"></div>
+                    </div>
+                </label>
+            </div>
+            <div class="flex items-center gap-2 opacity-80 group-hover:opacity-100">
+                <button class="editBtn ringy text-xs px-2 py-1 rounded-md bg-ac/10 hover:bg-ac/20">Edit</button>
+                <button
+                    class="delBtn ringy text-xs px-2 py-1 rounded-md bg-[#ef44441a] hover:bg-[#ef444433]">Delete</button>
+            </div>
+        </article>
+    </template>
+
+    <script>
+        /* ---------- tiny helper store ---------- */
+        const $ = s => document.querySelector(s);
+        const el = (tag, attrs = {}) => Object.assign(document.createElement(tag), attrs);
+        const Store = {
+            key: "todo.superboard.v1",
+            load() {
+                try {
+                    return JSON.parse(localStorage.getItem(this.key)) ?? {
+                        todo: [{ t: "Record Video Update", done: false }],
+                        progress: [{ t: "Walk the dog", done: false }],
+                        done: [{ t: "Read 20 pages of a book", done: true }, { t: "Reply to emails", done: true }]
+                    }
+                } catch { return { todo: [], progress: [], done: [] } }
+            },
+            save(data) { localStorage.setItem(this.key, JSON.stringify(data)) }
+        };
+
+        /* ---------- state & render ---------- */
+        let state = Store.load();
+        const cols = { todo: $("#todo"), progress: $("#progress"), done: $("#done") };
+        const tpl = $("#tpl").content.firstElementChild;
+
+        function render() {
+            Object.entries(cols).forEach(([key, node]) => {
+                node.innerHTML = "";
+                (state[key] || []).forEach((item, i) => node.appendChild(cardFor(key, i, item)));
+            });
+            filter($("#q").value);
+        }
+
+        function cardFor(col, idx, item) {
+            const card = tpl.cloneNode(true);
+            const title = card.querySelector(".title");
+            const edit = card.querySelector(".edit");
+            const meta = card.querySelector(".meta");
+            const box = card.querySelector("input[type=checkbox]");
+            title.textContent = item.t;
+            edit.value = item.t;
+            box.checked = !!item.done;
+            title.classList.toggle("line-through", box.checked);
+            title.classList.toggle("text-mut", box.checked);
+            meta.textContent = item.note || "";
+            meta.hidden = !item.note;
+
+            // drag
+            card.addEventListener("dragstart", e => {
+                e.dataTransfer.setData("text/plain", JSON.stringify({ col, idx }));
+                requestAnimationFrame(() => card.classList.add("opacity-70"));
+            });
+            card.addEventListener("dragend", () => card.classList.remove("opacity-70"));
+
+            // complete
+            box.addEventListener("change", () => {
+                item.done = box.checked;
+                // auto move to done if checked, back to todo if unchecked and was in done
+                if (item.done && col !== "done") { move(col, idx, "done"); }
+                else { persist(); }
+            });
+
+            // inline edit
+            function startEdit() { title.hidden = true; edit.hidden = false; edit.focus(); edit.select(); }
+            function finishEdit(save) {
+                if (save) { const v = edit.value.trim(); if (v) { item.t = v; title.textContent = v; } }
+                edit.hidden = true; title.hidden = false; persist();
+            }
+            card.querySelector(".editBtn").addEventListener("click", startEdit);
+            title.addEventListener("dblclick", startEdit);
+            edit.addEventListener("keydown", e => {
+                if (e.key === "Enter") finishEdit(true);
+                if (e.key === "Escape") finishEdit(false);
+            });
+            edit.addEventListener("blur", () => finishEdit(true));
+
+            // delete
+            card.querySelector(".delBtn").addEventListener("click", () => {
+                state[col].splice(idx, 1); persist(); render();
+            });
+
+            return card;
+        }
+
+        // move item between lists
+        function move(from, index, to, toIndex = null) {
+            const item = state[from].splice(index, 1)[0];
+            if (!state[to]) state[to] = [];
+            if (toIndex === null || toIndex > state[to].length) state[to].push(item);
+            else state[to].splice(toIndex, 0, item);
+            persist(); render();
+        }
+
+        function persist() { Store.save(state); }
+
+        // DnD for columns
+        Object.values(cols).forEach(col => {
+            col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("drag-over"); });
+            col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+            col.addEventListener("drop", e => {
+                e.preventDefault(); col.classList.remove("drag-over");
+                const { col: from, idx } = JSON.parse(e.dataTransfer.getData("text/plain"));
+                const to = col.id;
+                // compute drop index (nearest card)
+                const cards = [...col.querySelectorAll(".card")];
+                const y = e.clientY;
+                let toIndex = cards.findIndex(c => y < c.getBoundingClientRect().top + c.offsetHeight / 2);
+                if (toIndex < 0) toIndex = null;
+                move(from, idx, to, toIndex);
+            });
+        });
+
+        // Add new
+        $("#addBtn").addEventListener("click", () => {
+            const t = $("#newTitle").value.trim();
+            if (!t) return $("#newTitle").focus();
+            const list = $("#newCol").value;
+            (state[list] ||= []).push({ t, done: list === "done" });
+            $("#newTitle").value = "";
+            persist(); render();
+        });
+        $("#newTitle").addEventListener("keydown", e => { if (e.key === "Enter") $("#addBtn").click(); });
+
+        // Search
+        function filter(q = "") {
+            const term = q.toLowerCase().trim();
+            document.querySelectorAll(".card .title").forEach(el => {
+                const hit = el.textContent.toLowerCase().includes(term);
+                el.closest(".card").classList.toggle("hidden", term && !hit);
+            });
+        }
+        $("#q").addEventListener("input", e => filter(e.target.value));
+
+        // Clear done
+        $("#clearDone").addEventListener("click", () => {
+            state.done = [];
+            Object.keys(state).forEach(k => state[k] = state[k].filter(x => !x.done || k !== "done"));
+            persist(); render();
+        });
+
+        // initial render
+        render();
+    </script>
+</body>
+
+</html>
